@@ -11,7 +11,7 @@
   body{background:#020304;overflow:hidden;height:100vh;width:100vw;cursor:none;}
 
   #star-canvas  {position:fixed;inset:0;z-index:0;pointer-events:none;}
-  #grid-canvas  {position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0.14;}
+
   .scene        {position:fixed;inset:0;z-index:2;}
   .scene video  {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 2.5s ease;filter:brightness(0.42) sepia(0.28) contrast(1.15) hue-rotate(-5deg);}
   .scene video.active{opacity:1;}
@@ -22,9 +22,8 @@
   #glitch       {position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;mix-blend-mode:screen;background:rgba(180,40,20,0.07);}
   #glitch2      {position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;mix-blend-mode:screen;background:rgba(20,200,170,0.055);transform:translateX(4px);}
   #glitch3      {position:fixed;inset:0;z-index:7;pointer-events:none;opacity:0;mix-blend-mode:screen;background:rgba(40,40,200,0.04);transform:translateX(-3px) translateY(2px);}
-  .scan         {position:fixed;inset:0;z-index:8;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 3px);}
-  #sweep        {position:fixed;left:0;right:0;z-index:9;pointer-events:none;height:2px;opacity:0;background:linear-gradient(90deg,transparent,rgba(60,200,180,0.12),rgba(60,200,180,0.35),rgba(60,200,180,0.12),transparent);box-shadow:0 0 12px rgba(60,200,180,0.2);animation:sweepDown 9s linear infinite;}
-  @keyframes sweepDown{0%{top:-2px;opacity:0;}2%{opacity:1;}98%{opacity:.5;}100%{top:100vh;opacity:0;}}
+  
+
   .grain        {position:fixed;inset:0;z-index:10;pointer-events:none;opacity:0.08;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");background-size:200px;}
 
   #cur{position:fixed;z-index:20;pointer-events:none;transform:translate(-50%,-50%);}
@@ -266,7 +265,7 @@
 </div>
 
 <canvas id="star-canvas"></canvas>
-<canvas id="grid-canvas"></canvas>
+
 <div class="scene">
   <video id="v1" muted playsinline><source src="uploads/social_u7158376737_a_scientific_botanical_illustration_on_a_single_a_8c7f2670-7c43-49dc-a428-37c6c6f57479_2.mp4" type="video/mp4"></video>
   <video id="v2" muted playsinline><source src="uploads/social_u7158376737_a_hyper-realistic_vintage_scientific_botanical_pl_e272f3b6-46b9-4cb7-933a-6809fdd5e3aa_1.mp4" type="video/mp4"></video>
@@ -278,8 +277,6 @@
 <div class="torch"></div>
 <div class="vignette"></div>
 <div id="glitch"></div><div id="glitch2"></div><div id="glitch3"></div>
-<div class="scan"></div>
-<div id="sweep"></div>
 <div class="grain"></div>
 
 <div id="cur">
@@ -777,18 +774,7 @@ function drawSpores(t){
   });
 }
 
-// ── GRID ──
-(function(){
-  const gc=document.getElementById('grid-canvas');
-  gc.width=window.innerWidth;gc.height=window.innerHeight;
-  const gx=gc.getContext('2d');
-  gx.strokeStyle='rgba(60,200,180,0.06)';gx.lineWidth=.5;
-  for(let x=0;x<gc.width;x+=60){gx.beginPath();gx.moveTo(x,0);gx.lineTo(x,gc.height);gx.stroke();}
-  for(let y=0;y<gc.height;y+=60){gx.beginPath();gx.moveTo(0,y);gx.lineTo(gc.width,y);gx.stroke();}
-  gx.strokeStyle='rgba(210,175,110,0.07)';gx.lineWidth=.8;
-  gx.beginPath();gx.moveTo(0,gc.height/2);gx.lineTo(gc.width,gc.height/2);gx.stroke();
-  gx.beginPath();gx.moveTo(gc.width/2,0);gx.lineTo(gc.width/2,gc.height);gx.stroke();
-})();
+
 
 // ── MAGNETIC FIELD ──
 const magCanvas=document.getElementById('mag-canvas');
@@ -851,6 +837,7 @@ document.addEventListener('mousemove',e=>{
   el.textContent=String(Math.round(mx)).padStart(4,'0')+' · '+String(Math.round(my)).padStart(4,'0');
   document.documentElement.style.setProperty('--cx',mx+'px');document.documentElement.style.setProperty('--cy',my+'px');
   updateSignal(speed);
+  checkHotspots(mx, my);
   if(entered&&speed>1.5){const n=Math.min(Math.floor(speed*.45),6);for(let i=0;i<n;i++)spawnParticle();}
   document.getElementById('dwell').style.opacity='0';clearTimeout(dwellTimer);
   if(entered)dwellTimer=setTimeout(showDwell,2800);
@@ -1156,7 +1143,56 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ── TWEAKS ──
+// ── SECRET HOTSPOTS ──
+// ★ここにURLを設定★
+const SECRET_X_URL = '#';   // X=0521 付近でクリック → このURLへ
+const SECRET_Y_URL = '#';   // Y=0813 付近でクリック → このURLへ
+const HOT_RANGE = 28; // 判定の幅 (±px)
+
+let nearX = false, nearY = false;
+
+function checkHotspots(x, y){
+  nearX = Math.abs(x - 521) < HOT_RANGE;
+  nearY = Math.abs(y - 813) < HOT_RANGE;
+
+  const coordEl = document.getElementById('coords');
+
+  if(nearX && nearY){
+    // 両方同時に入ったとき — 特別な演出
+    coordEl.style.color = 'rgba(255,220,100,0.9)';
+    coordEl.style.textShadow = '0 0 8px rgba(255,200,80,0.6)';
+    document.body.style.cursor = 'none'; // keep custom cursor
+  } else if(nearX){
+    coordEl.style.color = 'rgba(60,200,180,0.85)';
+    coordEl.style.textShadow = '0 0 6px rgba(60,200,180,0.5)';
+  } else if(nearY){
+    coordEl.style.color = 'rgba(210,175,90,0.85)';
+    coordEl.style.textShadow = '0 0 6px rgba(210,175,90,0.5)';
+  } else {
+    coordEl.style.color = 'rgba(60,200,180,0.25)';
+    coordEl.style.textShadow = 'none';
+  }
+}
+
+document.addEventListener('click', e => {
+  if(!entered) return;
+  if(document.getElementById('gallery').classList.contains('visible')) return;
+  if(document.getElementById('work-modal').classList.contains('visible')) return;
+  if(termOpen) return;
+
+  const x = e.clientX, y = e.clientY;
+  const hx = Math.abs(x - 521) < HOT_RANGE;
+  const hy = Math.abs(y - 813) < HOT_RANGE;
+
+  if(hx && hy){
+    // 両方交差点 — 特別ページ or 両方開く
+    window.open(SECRET_X_URL, '_blank');
+  } else if(hx){
+    window.open(SECRET_X_URL, '_blank');
+  } else if(hy){
+    window.open(SECRET_Y_URL, '_blank');
+  }
+});
 window.addEventListener('message',e=>{if(e.data?.type==='__activate_edit_mode')document.getElementById('tweaks-panel').style.display='block';if(e.data?.type==='__deactivate_edit_mode')document.getElementById('tweaks-panel').style.display='none';});
 window.parent.postMessage({type:'__edit_mode_available'},'*');
 const TWEAK_DEFAULTS=/*EDITMODE-BEGIN*/{"r":420,"bright":0.45,"dark":0.75}/*EDITMODE-END*/;
