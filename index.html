@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>—</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300&display=swap" rel="stylesheet">
+<style>
+  :root { --cx: 50vw; --cy: 50vh; --tr: 400px; --dark: 0.7; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #030202; overflow: hidden; height: 100vh; width: 100vw; cursor: none; }
+
+  /* VIDEOS */
+  .scene { position: fixed; inset: 0; z-index: 0; }
+  .scene video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0; transition: opacity 2s ease;
+    filter: brightness(0.5) sepia(0.08) contrast(1.1);
+  }
+  .scene video.active { opacity: 1; }
+
+  /* PARTICLE CANVAS */
+  #trail { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+
+  /* TORCH */
+  .torch {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(
+      circle var(--tr) at var(--cx) var(--cy),
+      transparent 0%,
+      rgba(3,2,2,0.15) 35%,
+      rgba(3,2,2,var(--dark)) 100%
+    );
+  }
+
+  /* GLITCH OVERLAY */
+  #glitch {
+    position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    opacity: 0; mix-blend-mode: screen;
+    background: rgba(180,40,40,0.08);
+  }
+  #glitch2 {
+    position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    opacity: 0; mix-blend-mode: screen;
+    background: rgba(40,180,160,0.06);
+    transform: translateX(3px);
+  }
+
+  /* SCANLINES */
+  .scan {
+    position: fixed; inset: 0; z-index: 4; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px);
+  }
+
+  /* GRAIN */
+  .grain {
+    position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0.1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px;
+  }
+
+  /* CURSOR */
+  #cur { position: fixed; z-index: 10; pointer-events: none; transform: translate(-50%,-50%); }
+
+  /* CORNER UI */
+  .corner {
+    position: fixed; z-index: 8; pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.16em; line-height: 2;
+    color: rgba(200,185,155,0.32); text-transform: uppercase;
+    opacity: 0; animation: fadeIn 1s ease 1.5s forwards;
+  }
+  .corner::before {
+    content: ''; position: absolute;
+    width: 10px; height: 10px;
+  }
+  .tl { top: 26px; left: 30px; }
+  .tl::before { border-top: 0.5px solid rgba(200,185,155,0.15); border-left: 0.5px solid rgba(200,185,155,0.15); top: -5px; left: -7px; }
+  .tr { top: 26px; right: 30px; text-align: right; }
+  .tr::before { border-top: 0.5px solid rgba(200,185,155,0.15); border-right: 0.5px solid rgba(200,185,155,0.15); top: -5px; right: -7px; }
+  .bl { bottom: 26px; left: 30px; }
+  .bl::before { border-bottom: 0.5px solid rgba(200,185,155,0.15); border-left: 0.5px solid rgba(200,185,155,0.15); bottom: -5px; left: -7px; }
+  .br { bottom: 26px; right: 30px; text-align: right; }
+  .br::before { border-bottom: 0.5px solid rgba(200,185,155,0.15); border-right: 0.5px solid rgba(200,185,155,0.15); bottom: -5px; right: -7px; }
+
+  /* COORDS */
+  #coords {
+    position: fixed; z-index: 9; pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 8px; letter-spacing: 0.1em;
+    color: rgba(200,185,155,0.28); white-space: nowrap;
+    transform: translate(16px, 6px);
+  }
+
+  /* DWELL TEXT */
+  #dwell {
+    position: fixed; z-index: 9; pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(200,185,155,0.45); white-space: nowrap;
+    opacity: 0; transform: translate(-50%, 30px); transition: opacity 1s ease;
+  }
+
+  /* GHOST TEXTS */
+  .ghost {
+    position: fixed; z-index: 7; pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(200,185,155,0.18); opacity: 0; transition: opacity 1.5s ease;
+  }
+
+  /* SIGNAL BAR */
+  #signal {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+    z-index: 8; pointer-events: none;
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0; animation: fadeIn 1s ease 2.5s forwards;
+  }
+  #signal-label {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(200,185,155,0.2);
+  }
+  #signal-bars { display: flex; gap: 2px; align-items: flex-end; }
+  .sbar {
+    width: 3px; background: rgba(200,185,155,0.15);
+    transition: height 0.3s ease, background 0.3s ease;
+  }
+
+  /* ENTER */
+  #enter {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    cursor: none; background: #030202;
+    transition: opacity 2s ease;
+  }
+  #enter-inner { text-align: center; }
+  #enter-label {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.4em; text-transform: uppercase;
+    color: rgba(200,185,155,0.25); animation: breathe 3s ease infinite;
+  }
+  #enter-sub {
+    margin-top: 16px;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(200,185,155,0.1);
+  }
+  @keyframes breathe { 0%,100%{opacity:.25} 50%{opacity:.7} }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  /* TWEAKS */
+  #tweaks-panel {
+    display: none; position: fixed; bottom: 24px; right: 24px; z-index: 100;
+    background: rgba(3,2,2,0.97); border: 0.5px solid rgba(200,185,155,0.1);
+    padding: 18px 20px; width: 210px; backdrop-filter: blur(16px); pointer-events: all;
+  }
+  #tweaks-panel h3 {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.22em; color: rgba(200,185,155,0.35);
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+  .tweak-row { margin-bottom: 12px; }
+  .tweak-row label {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.12em; color: rgba(200,185,155,0.25); margin-bottom: 5px;
+  }
+  .tweak-row input[type=range] { width: 100%; accent-color: rgba(185,145,110,0.6); }
+</style>
+</head>
+<body>
+
+<div id="enter">
+  <div id="enter-inner">
+    <div id="enter-label">— enter —</div>
+    <div id="enter-sub">Specimen No. VII &nbsp;·&nbsp; Series IV</div>
+  </div>
+</div>
+
+<div class="scene">
+  <video id="v1" muted playsinline><source src="uploads/social_u7158376737_a_scientific_botanical_illustration_on_a_single_a_8c7f2670-7c43-49dc-a428-37c6c6f57479_2.mp4" type="video/mp4"></video>
+  <video id="v2" muted playsinline><source src="uploads/social_u7158376737_a_hyper-realistic_vintage_scientific_botanical_pl_e272f3b6-46b9-4cb7-933a-6809fdd5e3aa_1.mp4" type="video/mp4"></video>
+  <video id="v3" muted playsinline><source src="uploads/u7158376737_A_vintage_scientific_botanical_illustration_of_a__b6c283b5-488f-4219-a456-27067d87399e_0-ced206b6.mp4" type="video/mp4"></video>
+  <video id="v4" muted playsinline><source src="uploads/u7158376737_A_scientific_botanical_illustration_of_a_single_u_6fcb50ee-45ea-4b6a-87ec-c2dc50961815_1.mp4" type="video/mp4"></video>
+</div>
+
+<canvas id="trail"></canvas>
+<div class="torch" id="torch"></div>
+<div id="glitch"></div><div id="glitch2"></div>
+<div class="scan"></div>
+<div class="grain"></div>
+
+<div id="cur">
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <line x1="16" y1="0" x2="16" y2="32" stroke="rgba(200,185,155,0.4)" stroke-width="0.5"/>
+    <line x1="0" y1="16" x2="32" y2="16" stroke="rgba(200,185,155,0.4)" stroke-width="0.5"/>
+    <circle cx="16" cy="16" r="4" stroke="rgba(200,185,155,0.25)" stroke-width="0.5"/>
+    <circle cx="16" cy="16" r="10" stroke="rgba(200,185,155,0.1)" stroke-width="0.5" stroke-dasharray="2 4"/>
+  </svg>
+</div>
+
+<div id="coords">0000 · 0000</div>
+<div id="dwell"></div>
+
+<div class="corner tl" id="c-tl">Specimen No. VII<br>Series IV</div>
+<div class="corner tr" id="c-tr">XIX · IV · MMXXVI<br>Origin unknown</div>
+<div class="corner bl" id="c-bl">— · —</div>
+<div class="corner br" id="c-br">Scanning</div>
+
+<div class="ghost" id="g1" style="top:19%;left:7%">bioluminescent</div>
+<div class="ghost" id="g2" style="top:68%;right:10%">incertae sedis</div>
+<div class="ghost" id="g3" style="top:42%;left:60%">root section · iv</div>
+<div class="ghost" id="g4" style="top:80%;left:28%">unverified</div>
+<div class="ghost" id="g5" style="top:12%;right:18%">do not enter</div>
+<div class="ghost" id="g6" style="top:55%;left:5%">— redacted —</div>
+<div class="ghost" id="g7" style="top:30%;right:6%">entity detected</div>
+
+<div id="signal">
+  <div id="signal-label">Signal</div>
+  <div id="signal-bars">
+    <div class="sbar" style="height:4px" id="sb0"></div>
+    <div class="sbar" style="height:6px" id="sb1"></div>
+    <div class="sbar" style="height:8px" id="sb2"></div>
+    <div class="sbar" style="height:10px" id="sb3"></div>
+    <div class="sbar" style="height:12px" id="sb4"></div>
+    <div class="sbar" style="height:10px" id="sb5"></div>
+    <div class="sbar" style="height:8px" id="sb6"></div>
+  </div>
+</div>
+
+<div id="tweaks-panel">
+  <h3>Tweaks</h3>
+  <div class="tweak-row"><label>Torch Radius</label><input type="range" id="tw-r" min="60" max="500" step="10" value="400"></div>
+  <div class="tweak-row"><label>Brightness</label><input type="range" id="tw-bright" min="0.2" max="2" step="0.05" value="0.5"></div>
+  <div class="tweak-row"><label>Darkness</label><input type="range" id="tw-dark" min="0.4" max="1" step="0.01" value="0.7"></div>
+</div>
+
+<script>
+// ── STATE ──
+let mx = window.innerWidth/2, my = window.innerHeight/2;
+let pmx = mx, pmy = my, speed = 0;
+let entered = false;
+let torchR = 400, brightness = 0.5, darkness = 0.7;
+const vids = ['v1','v2','v3','v4'].map(id => document.getElementById(id));
+let playIdx = 0, dwellTimer = null, dwellIdx = 0;
+
+// ── CANVAS TRAIL ──
+const canvas = document.getElementById('trail');
+const ctx = canvas.getContext('2d');
+let particles = [];
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function spawnParticle() {
+  const spread = Math.min(speed * 0.3, 8);
+  particles.push({
+    x: mx + (Math.random()-0.5)*spread,
+    y: my + (Math.random()-0.5)*spread,
+    r: 0.5 + Math.random() * 1.2,
+    a: 0.35 + Math.random() * 0.25,
+    vx: (Math.random()-0.5)*0.3,
+    vy: (Math.random()-0.5)*0.3 - 0.1,
+    life: 1,
+  });
+}
+
+function drawTrail() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.x  += p.vx; p.y += p.vy;
+    p.life -= 0.018;
+    p.a   = p.life * 0.35;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(200,185,140,${p.a})`;
+    ctx.fill();
+  }
+  requestAnimationFrame(drawTrail);
+}
+drawTrail();
+
+// ── MOUSE ──
+document.addEventListener('mousemove', e => {
+  pmx = mx; pmy = my;
+  mx = e.clientX; my = e.clientY;
+  speed = Math.hypot(mx-pmx, my-pmy);
+
+  // Update cursor
+  document.getElementById('cur').style.left = mx + 'px';
+  document.getElementById('cur').style.top  = my + 'px';
+
+  // Coords
+  const el = document.getElementById('coords');
+  el.style.left = mx + 'px';
+  el.style.top  = my + 'px';
+  el.textContent = String(Math.round(mx)).padStart(4,'0') + ' · ' + String(Math.round(my)).padStart(4,'0');
+
+  // Torch
+  document.documentElement.style.setProperty('--cx', mx+'px');
+  document.documentElement.style.setProperty('--cy', my+'px');
+
+  // Signal bars based on speed
+  updateSignal(speed);
+
+  // Particles when moving
+  if (entered && speed > 2) {
+    const n = Math.min(Math.floor(speed * 0.4), 5);
+    for (let i=0; i<n; i++) spawnParticle();
+  }
+
+  // Dwell reset
+  document.getElementById('dwell').style.opacity = '0';
+  clearTimeout(dwellTimer);
+  if (entered) dwellTimer = setTimeout(showDwell, 2500);
+});
+
+// ── SIGNAL ──
+const bars = Array.from({length:7}, (_,i)=>document.getElementById('sb'+i));
+function updateSignal(s) {
+  const level = Math.min(s / 20, 1);
+  bars.forEach((b, i) => {
+    const threshold = i / bars.length;
+    b.style.background = level > threshold
+      ? `rgba(200,185,155,${0.15 + level * 0.45})`
+      : 'rgba(200,185,155,0.08)';
+  });
+}
+
+// ── DWELL ──
+const dwellMsgs = [
+  'something is here',
+  '— listening —',
+  'entity detected',
+  'do not move',
+  'origin unknown',
+  '[ redacted ]',
+  'specimen alive',
+  'who was here',
+];
+function showDwell() {
+  const el = document.getElementById('dwell');
+  el.textContent = dwellMsgs[dwellIdx++ % dwellMsgs.length];
+  el.style.left  = mx + 'px';
+  el.style.top   = my + 'px';
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity = '0', 2400);
+}
+
+// ── GLITCH ──
+function triggerGlitch() {
+  const g  = document.getElementById('glitch');
+  const g2 = document.getElementById('glitch2');
+  const dur = 60 + Math.random() * 120;
+  g.style.transition  = 'opacity 0.05s';
+  g2.style.transition = 'opacity 0.05s';
+  g.style.opacity     = (0.3 + Math.random() * 0.5).toFixed(2);
+  g2.style.opacity    = (0.2 + Math.random() * 0.4).toFixed(2);
+  // Shift
+  const shiftX = (Math.random() * 6 - 3).toFixed(1);
+  const shiftY = (Math.random() * 3 - 1.5).toFixed(1);
+  document.querySelector('.scene').style.transform = `translate(${shiftX}px,${shiftY}px)`;
+  setTimeout(() => {
+    g.style.opacity  = '0';
+    g2.style.opacity = '0';
+    document.querySelector('.scene').style.transform = 'none';
+  }, dur);
+  setTimeout(triggerGlitch, 3000 + Math.random() * 8000);
+}
+
+// ── TEXT SCRAMBLE ──
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789·—';
+function scramble(el, finalText, duration = 800) {
+  let frame = 0;
+  const total = Math.floor(duration / 40);
+  const orig  = finalText;
+  const iv = setInterval(() => {
+    frame++;
+    if (frame >= total) { el.textContent = orig; clearInterval(iv); return; }
+    const progress = frame / total;
+    el.textContent = orig.split('').map((ch, i) => {
+      if (ch === ' ' || ch === '\n') return ch;
+      if (i / orig.length < progress) return ch;
+      return CHARS[Math.floor(Math.random() * CHARS.length)];
+    }).join('');
+  }, 40);
+}
+
+function scheduleScrambles() {
+  if (!entered) return;
+  const corners = [
+    {id:'c-tl', text:'Specimen No. VII\nSeries IV'},
+    {id:'c-tr', text:'XIX · IV · MMXXVI\nOrigin unknown'},
+    {id:'c-bl', text:'— · —'},
+    {id:'c-br', text:'Analyzing'},
+  ];
+  const tgt = corners[Math.floor(Math.random()*corners.length)];
+  const el = document.getElementById(tgt.id);
+  if (el) scramble(el, tgt.text);
+  setTimeout(scheduleScrambles, 4000 + Math.random() * 6000);
+}
+
+// ── GHOST FLICKER ──
+const ghosts = document.querySelectorAll('.ghost');
+function flickerGhost() {
+  const g = ghosts[Math.floor(Math.random() * ghosts.length)];
+  g.style.opacity = (0.15 + Math.random()*0.25).toFixed(2);
+  setTimeout(() => g.style.opacity = '0', 600 + Math.random()*1400);
+  setTimeout(flickerGhost, 1500 + Math.random()*3500);
+}
+
+// ── BREATHING TORCH ──
+let breathPhase = 0;
+function breatheTorch() {
+  breathPhase += 0.02;
+  const delta = Math.sin(breathPhase) * 15;
+  document.documentElement.style.setProperty('--tr', (torchR + delta) + 'px');
+  requestAnimationFrame(breatheTorch);
+}
+breatheTorch();
+
+// ── VIDEO PLAYLIST ──
+function applyVideoFilter() {
+  vids.forEach(v => v.style.filter = `brightness(${brightness}) sepia(0.08) contrast(1.1)`);
+}
+function crossfade(fromIdx) {
+  const next = (fromIdx+1) % vids.length;
+  vids[fromIdx].classList.remove('active');
+  vids[next].currentTime = 0;
+  vids[next].play().catch(()=>{});
+  setTimeout(() => vids[next].classList.add('active'), 100);
+  playIdx = next;
+}
+vids.forEach((v,i) => v.addEventListener('ended', () => crossfade(i)));
+
+// ── ENTER ──
+const enterEl = document.getElementById('enter');
+function startExperience() {
+  if (entered) return;
+  entered = true;
+  enterEl.style.opacity = '0';
+  setTimeout(() => enterEl.style.display = 'none', 2000);
+  vids[0].play().then(() => vids[0].classList.add('active')).catch(()=>{});
+  applyVideoFilter();
+  setTimeout(triggerGlitch, 2000);
+  setTimeout(flickerGhost, 2500);
+  setTimeout(scheduleScrambles, 4000);
+  dwellTimer = setTimeout(showDwell, 3000);
+}
+enterEl.addEventListener('click', startExperience);
+enterEl.addEventListener('touchstart', startExperience);
+document.addEventListener('keydown', startExperience);
+
+// ── TWEAKS ──
+window.addEventListener('message', e => {
+  if (e.data?.type==='__activate_edit_mode')   document.getElementById('tweaks-panel').style.display='block';
+  if (e.data?.type==='__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display='none';
+});
+window.parent.postMessage({type:'__edit_mode_available'},'*');
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "r": 400,
+  "bright": 1,
+  "dark": 0.7
+}/*EDITMODE-END*/;
+
+function applyTweaks(t) {
+  torchR     = t.r      ?? 400;
+  brightness = t.bright ?? 0.5;
+  darkness   = t.dark   ?? 0.7;
+  document.documentElement.style.setProperty('--dark', darkness);
+  applyVideoFilter();
+}
+
+applyTweaks(TWEAK_DEFAULTS);
+document.getElementById('tw-r').value     = TWEAK_DEFAULTS.r;
+document.getElementById('tw-bright').value= TWEAK_DEFAULTS.bright;
+document.getElementById('tw-dark').value  = TWEAK_DEFAULTS.dark;
+
+function sendTweaks() {
+  const edits = {
+    r:      parseFloat(document.getElementById('tw-r').value),
+    bright: parseFloat(document.getElementById('tw-bright').value),
+    dark:   parseFloat(document.getElementById('tw-dark').value),
+  };
+  applyTweaks(edits);
+  window.parent.postMessage({type:'__edit_mode_set_keys', edits},'*');
+}
+['tw-r','tw-bright','tw-dark'].forEach(id =>
+  document.getElementById(id).addEventListener('input', sendTweaks));
+</script>
+</body>
+</html>
